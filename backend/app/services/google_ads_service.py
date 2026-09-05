@@ -3,6 +3,7 @@ refresh, mirroring apps/optima/lib/google-ads-client.ts) and GAQL queries for
 campaign/ad performance.
 """
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -105,7 +106,9 @@ DATE_PRESET_TO_GAQL = {
 
 
 def _date_clause(date_preset: str, since: Optional[str], until: Optional[str]) -> str:
-    if since and until:
+    """Format GAQL date filter safely against injection."""
+    iso_date = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if since and until and iso_date.match(since) and iso_date.match(until):
         return f"segments.date BETWEEN '{since}' AND '{until}'"
     gaql_preset = DATE_PRESET_TO_GAQL.get(date_preset, "LAST_30_DAYS")
     return f"segments.date DURING {gaql_preset}"
