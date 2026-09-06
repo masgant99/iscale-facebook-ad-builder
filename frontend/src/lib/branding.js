@@ -1,5 +1,5 @@
 // White-label branding: one build, many clients. Values are baked at build time
-// via Vite env vars; keep Nalarin defaults so the current instance stays unchanged.
+// via Vite env vars; keep Banyumedia defaults so the current instance stays unchanged.
 export const APP_NAME = import.meta.env.VITE_APP_NAME || 'Banyumedia AI Studio';
 export const APP_LOGO = import.meta.env.VITE_APP_LOGO || '/banyumedia_logo.png';
 export const APP_TAGLINE = import.meta.env.VITE_APP_TAGLINE || 'AI-Powered Ads & Marketing Automation';
