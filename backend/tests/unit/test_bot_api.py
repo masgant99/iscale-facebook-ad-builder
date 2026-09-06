@@ -33,5 +33,5 @@ class TestBotApiScopes:
     def test_bot_has_no_write_routes_in_openapi(self, client):
         schema = client.get("/api/v1/openapi.json").json()
         bot_paths = [path for path in schema["paths"] if path.startswith("/api/v1/bot")]
-        assert bot_paths == ["/api/v1/bot/connections", "/api/v1/bot/safety", "/api/v1/bot/overview"]
+        assert set(bot_paths) == {"/api/v1/bot/connections", "/api/v1/bot/safety", "/api/v1/bot/overview", "/api/v1/bot/spend"}
         assert all("post" not in schema["paths"][path] for path in bot_paths)

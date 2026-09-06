@@ -30,8 +30,8 @@ export default function Settings() {
         setLoading(true);
         try {
             const [promptsRes, stylesRes] = await Promise.all([
-                authFetch(`${API_BASE}/prompts`),
-                authFetch(`${API_BASE}/ad-styles`)
+                authFetch(`${API_BASE}/prompts/`),
+                authFetch(`${API_BASE}/ad-styles/`)
             ]);
 
             if (promptsRes.ok) {

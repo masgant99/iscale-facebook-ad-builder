@@ -4,6 +4,7 @@ from app.models import MutationAudit
 from app.core.executor import AutoModePolicy
 
 def test_optimization_scheduler_disabled(db_session, monkeypatch):
+    db_session.query(MutationAudit).delete()
     monkeypatch.setenv("ADS_AUTO_MODE", "false")
     service = OptimizationSchedulerService(db_session)
     service.run_optimization_scan()
@@ -13,6 +14,7 @@ def test_optimization_scheduler_disabled(db_session, monkeypatch):
     assert count == 0
 
 def test_optimization_scheduler_enabled(db_session, monkeypatch):
+    db_session.query(MutationAudit).delete()
     monkeypatch.setenv("ADS_AUTO_MODE", "true")
     monkeypatch.setenv("ADS_AUTO_ACTIONS", "campaign.pause,budget.update")
     service = OptimizationSchedulerService(db_session)

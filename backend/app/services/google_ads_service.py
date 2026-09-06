@@ -242,7 +242,8 @@ async def create_campaign(
     budget_service = client.get_service("CampaignBudgetService")
     budget_operation = client.get_type("CampaignBudgetOperation")
     budget = budget_operation.create
-    budget.name = f"{name} budget"
+    import time
+    budget.name = f"{name} budget {int(time.time())}"
     budget.amount_micros = daily_budget_micros
     budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
     budget_response = budget_service.mutate_campaign_budgets(customer_id=customer_id, operations=[budget_operation])
