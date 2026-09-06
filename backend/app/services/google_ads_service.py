@@ -4,6 +4,7 @@ campaign/ad performance.
 """
 from datetime import datetime, timedelta, timezone
 import re
+import time
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -96,6 +97,25 @@ async def list_accessible_customers(refresh_token: str) -> list[str]:
     return [name.split("/")[-1] for name in response.resource_names]
 
 
+async def get_account_name(refresh_token: str, customer_id: str) -> Optional[str]:
+    """Descriptive name for a customer ID (for the account picker). Manager
+    accounts and API-inaccessible customers return None — callers fall back
+    to the formatted customer ID."""
+    client = _build_client(refresh_token)
+    ga_service = client.get_service("GoogleAdsService")
+    try:
+        stream = ga_service.search_stream(
+            customer_id=normalize_login_customer_id(customer_id),
+            query="SELECT customer.descriptive_name FROM customer LIMIT 1",
+        )
+        for batch in stream:
+            for row in batch.results:
+                return row.customer.descriptive_name or None
+    except Exception:
+        return None
+    return None
+
+
 DATE_PRESET_TO_GAQL = {
     "last_7d": "LAST_7_DAYS",
     "last_14d": "LAST_14_DAYS",
@@ -170,7 +190,14 @@ async def get_campaign_performance(
     return list(campaigns.values())
 
 
-async def get_ad_performance(refresh_token: str, customer_id: str, campaign_id: str) -> list[dict]:
+async def get_ad_performance(
+    refresh_token: str,
+    customer_id: str,
+    campaign_id: str,
+    date_preset: str = "last_30d",
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+) -> list[dict]:
     """Ad-level impressions/clicks/cost for one campaign via GAQL."""
     client = _build_client(refresh_token)
     ga_service = client.get_service("GoogleAdsService")
@@ -186,7 +213,7 @@ async def get_ad_performance(refresh_token: str, customer_id: str, campaign_id: 
             metrics.conversions
         FROM ad_group_ad
         WHERE campaign.id = {int(campaign_id)}
-        AND segments.date DURING LAST_30_DAYS
+        AND {_date_clause(date_preset, since, until)}
         LIMIT 200
     """
 
@@ -242,7 +269,6 @@ async def create_campaign(
     budget_service = client.get_service("CampaignBudgetService")
     budget_operation = client.get_type("CampaignBudgetOperation")
     budget = budget_operation.create
-    import time
     budget.name = f"{name} budget {int(time.time())}"
     budget.amount_micros = daily_budget_micros
     budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD

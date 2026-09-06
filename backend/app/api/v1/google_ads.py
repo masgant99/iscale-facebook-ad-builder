@@ -27,6 +27,7 @@ from app.services.google_ads_oauth import (
 )
 from app.services.google_ads_service import (
     list_accessible_customers,
+    get_account_name,
     get_campaign_performance,
     get_ad_performance,
     get_valid_access_token,
@@ -174,6 +175,14 @@ async def oauth_callback(
     encrypted_access_token = encrypt_token(tokens["access_token"])
     select_required = len(normalized_customer_ids) > 1
 
+    # Best-effort descriptive names for the account picker (None -> UI falls
+    # back to the formatted customer ID). Never fails the connect flow.
+    account_names: dict[str, str] = {}
+    for customer_id in normalized_customer_ids:
+        name = await get_account_name(refresh_token, customer_id)
+        if name:
+            account_names[customer_id] = name
+
     db.query(GoogleAdsConnection).filter(GoogleAdsConnection.user_id == user_id).update(
         {GoogleAdsConnection.is_active: False}, synchronize_session=False
     )
@@ -186,11 +195,13 @@ async def oauth_callback(
         if connection:
             connection.encrypted_refresh_token = encrypted_refresh_token
             connection.encrypted_access_token = encrypted_access_token
+            connection.account_name = account_names.get(customer_id)
             connection.is_active = not select_required
         else:
             db.add(GoogleAdsConnection(
                 user_id=user_id,
                 customer_id=customer_id,
+                account_name=account_names.get(customer_id),
                 encrypted_refresh_token=encrypted_refresh_token,
                 encrypted_access_token=encrypted_access_token,
                 is_active=not select_required,
@@ -358,6 +369,7 @@ async def get_campaigns(
 @router.get("/campaigns/{campaign_id}/ads")
 async def get_campaign_ads(
     campaign_id: str,
+    date_preset: str = "last_30d",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -367,7 +379,7 @@ async def get_campaign_ads(
     try:
         refresh_token = decrypt_token(connection.encrypted_refresh_token)
         await get_valid_access_token(db, connection)
-        ads = await get_ad_performance(refresh_token, connection.customer_id, campaign_id)
+        ads = await get_ad_performance(refresh_token, connection.customer_id, campaign_id, date_preset=date_preset)
     except GoogleAdsConnectionError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     except GoogleAdsNotConfigured as exc:

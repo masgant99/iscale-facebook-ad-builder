@@ -44,6 +44,11 @@ export default function GoogleAdsCampaigns() {
     const [statusChangePreview, setStatusChangePreview] = useState(null); // { campaign, targetAction }
     const [statusChanging, setStatusChanging] = useState(false);
 
+    // Ad-level drill-down
+    const [adsForCampaign, setAdsForCampaign] = useState(null); // campaign row currently expanded
+    const [ads, setAds] = useState([]);
+    const [adsLoading, setAdsLoading] = useState(false);
+
     const loadConnection = useCallback(async () => {
         setConnectionLoading(true);
         try {
@@ -221,6 +226,31 @@ export default function GoogleAdsCampaigns() {
         } finally {
             setCreating(false);
             setCreatePreview(null);
+        }
+    };
+
+    const handleToggleAds = async (campaign) => {
+        if (adsForCampaign?.id === campaign.id) {
+            setAdsForCampaign(null);
+            return;
+        }
+        setAdsForCampaign(campaign);
+        setAds([]);
+        setAdsLoading(true);
+        try {
+            const response = await authFetch(`${API_URL}/google-ads/campaigns/${campaign.id}/ads?date_preset=${datePreset}`);
+            if (response.ok) {
+                const data = await response.json();
+                setAds(data.ads || []);
+            } else {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Failed to load ads');
+            }
+        } catch (error) {
+            showError(error.message || 'Failed to load ads');
+            setAdsForCampaign(null);
+        } finally {
+            setAdsLoading(false);
         }
     };
 
@@ -421,16 +451,65 @@ export default function GoogleAdsCampaigns() {
                     onDatePresetChange={setDatePreset}
                     emptyMessage="No campaigns found for this date range."
                     renderActions={(campaign) => (
-                        <button
-                            onClick={() => handleRequestStatusChange(campaign)}
-                            disabled={!['ENABLED', 'PAUSED'].includes(campaign.status)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:border-amber-500 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                            {campaign.status === 'ENABLED' ? <Pause size={13} /> : <Play size={13} />}
-                            {campaign.status === 'ENABLED' ? 'Pause' : 'Enable'}
-                        </button>
+                        <span className="inline-flex items-center gap-2">
+                            <button
+                                onClick={() => handleToggleAds(campaign)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${adsForCampaign?.id === campaign.id ? 'border-amber-600 text-amber-700 bg-amber-50' : 'border-gray-300 text-gray-700 hover:border-amber-500 hover:text-amber-700'}`}
+                            >
+                                {adsForCampaign?.id === campaign.id ? 'Hide ads' : 'Ads'}
+                            </button>
+                            <button
+                                onClick={() => handleRequestStatusChange(campaign)}
+                                disabled={!['ENABLED', 'PAUSED'].includes(campaign.status)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 text-gray-700 hover:border-amber-500 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {campaign.status === 'ENABLED' ? <Pause size={13} /> : <Play size={13} />}
+                                {campaign.status === 'ENABLED' ? 'Pause' : 'Enable'}
+                            </button>
+                        </span>
                     )}
                 />
+            )}
+
+            {adsForCampaign && connection?.connected && (
+                <section aria-label={`Ads in ${adsForCampaign.name}`} className="bg-white rounded-xl border border-amber-300 shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-gray-100">
+                        <h2 className="text-sm font-bold text-gray-900">Ads in “{adsForCampaign.name}”</h2>
+                        <button type="button" onClick={() => setAdsForCampaign(null)} className="text-xs text-gray-500 hover:text-gray-900">Close</button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm min-w-[560px]">
+                            <thead className="bg-gray-50 text-gray-600">
+                                <tr>
+                                    <th className="px-4 py-3 font-medium text-left">Ad</th>
+                                    <th className="px-4 py-3 font-medium text-left">Status</th>
+                                    <th className="px-4 py-3 font-medium text-right">Impressions</th>
+                                    <th className="px-4 py-3 font-medium text-right">Clicks</th>
+                                    <th className="px-4 py-3 font-medium text-right">Cost</th>
+                                    <th className="px-4 py-3 font-medium text-right">Conversions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {adsLoading && (
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                                )}
+                                {!adsLoading && ads.length === 0 && (
+                                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No ads found for this date range.</td></tr>
+                                )}
+                                {!adsLoading && ads.map((ad) => (
+                                    <tr key={ad.id} className="hover:bg-amber-50/50">
+                                        <td className="px-4 py-3 text-left text-gray-800">{ad.name}</td>
+                                        <td className="px-4 py-3 text-left">{ad.status}</td>
+                                        <td className="px-4 py-3 text-right tabular-nums">{ad.impressions}</td>
+                                        <td className="px-4 py-3 text-right tabular-nums">{ad.clicks}</td>
+                                        <td className="px-4 py-3 text-right tabular-nums">{Number(ad.cost).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="px-4 py-3 text-right tabular-nums">{ad.conversions}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             )}
 
             <ConfirmationModal
