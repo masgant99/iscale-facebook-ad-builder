@@ -4,6 +4,7 @@ Agentic Ads Studio - Backend API
 Created by Didik Wahyudi
 """
 
+import asyncio
 import os
 import re
 from fastapi import FastAPI, Request
@@ -95,10 +96,11 @@ async def health_check():
 # Database Connection Validation
 @app.on_event("startup")
 async def startup_event():
-    """Validate PostgreSQL connection on startup"""
+    """Validate PostgreSQL connection on startup, then start the agentic
+    optimization scan loop (no-op unless ADS_AUTO_MODE=true)."""
     from app.database import engine
     from sqlalchemy import text
-    
+
     try:
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version()"))
@@ -111,6 +113,53 @@ async def startup_event():
         print(f"❌ Failed to connect to database: {e}")
         print(f"   DATABASE_URL: {sanitized_url}")
         raise RuntimeError(f"Database connection failed: {e}")
+
+    app.state.optimization_task = asyncio.create_task(optimization_scan_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    task = getattr(app.state, "optimization_task", None)
+    if task:
+        task.cancel()
+
+
+async def optimization_scan_loop():
+    """Background agentic-optimization audit loop (read-only in Phase 2).
+
+    Runs every ADS_MUTATION_SCAN_INTERVAL_SEC (default 1800). A Postgres
+    session-level advisory lock makes the scan single-flight across uvicorn
+    workers: whichever worker grabs the lock scans; the others skip this tick.
+    Fail-closed: any error is logged and the tick is skipped — the loop must
+    never crash the app.
+    """
+    import asyncio
+    import logging
+
+    from app.database import SessionLocal
+    from app.services.optimization_scheduler import OptimizationSchedulerService
+
+    logger = logging.getLogger(__name__)
+    interval = int(os.getenv("ADS_MUTATION_SCAN_INTERVAL_SEC", "1800") or "1800")
+    interval = max(interval, 60)  # floor: never spin faster than once a minute
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                if db.execute(text("SELECT pg_try_advisory_lock(815501)")).scalar():
+                    try:
+                        service = OptimizationSchedulerService(db)
+                        service.run_optimization_scan()
+                    finally:
+                        db.execute(text("SELECT pg_advisory_unlock(815501)"))
+                        db.commit()
+                else:
+                    logger.info("Optimization scan skipped: another worker holds the lock.")
+            finally:
+                db.close()
+        except Exception as exc:  # noqa: BLE001 - loop must survive anything
+            logger.error("Optimization scan loop error: %s", exc)
+        await asyncio.sleep(interval)
 
 
 # Include Routers

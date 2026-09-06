@@ -42,6 +42,14 @@ services:
     environment:
       DATABASE_URL: postgresql://ads_studio:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/ads_studio
       TRUSTED_PROXIES: 127.0.0.1
+      # Agentic optimization pilot — fail-closed guardrails. The scan loop is
+      # read-only audit (Phase 2: dummy metrics, executed=false always); flip
+      # ADS_AUTO_MODE to "false" (or set ADS_MUTATION_KILL_SWITCH=true) to
+      # disable without a rebuild.
+      ADS_AUTO_MODE: "true"
+      ADS_AUTO_ACTIONS: "campaign.pause,campaign.enable,budget.update"
+      ADS_AUTO_MAX_ACTIONS_PER_DAY: "5"
+      ADS_MUTATION_SCAN_INTERVAL_SEC: "1800"
     depends_on:
       postgres:
         condition: service_healthy
