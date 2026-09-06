@@ -136,6 +136,8 @@ async def optimization_scan_loop():
     import asyncio
     import logging
 
+    from sqlalchemy import text
+
     from app.database import SessionLocal
     from app.services.optimization_scheduler import OptimizationSchedulerService
 
