@@ -370,9 +370,11 @@ export default function GoogleAdsCampaigns() {
                 <section role="alert" className="border border-amber-300 bg-amber-50 px-4 py-4 text-amber-950">
                     <h2 className="font-bold">Google Ads data is not available yet</h2>
                     <p className="mt-1 text-sm leading-6">{campaignError}</p>
-                    {campaignError.includes('developer token is only approved') && (
+                    {(campaignError.includes('developer token is only approved')
+                        || campaignError.includes('CLOUD_PROJECT_NOT_APPROVED')
+                        || campaignError.includes('ACTION_NOT_PERMITTED')) && (
                         <p className="mt-2 text-sm leading-6">
-                            The account is connected correctly. Google must approve Basic or Standard API access before production campaigns can be read.
+                            The account is connected correctly. Google must grant the API access level (Basic or Standard) before production campaigns can be read. Check the Google Ads API Overview page in Google Cloud Console.
                         </p>
                     )}
                 </section>

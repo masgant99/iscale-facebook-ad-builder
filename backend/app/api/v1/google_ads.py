@@ -296,14 +296,10 @@ def disconnect(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    connection = (
-        db.query(GoogleAdsConnection)
-        .filter(GoogleAdsConnection.user_id == current_user.id, GoogleAdsConnection.is_active.is_(True))
-        .first()
+    db.query(GoogleAdsConnection).filter(GoogleAdsConnection.user_id == current_user.id).update(
+        {GoogleAdsConnection.is_active: False}, synchronize_session=False
     )
-    if connection:
-        connection.is_active = False
-        db.commit()
+    db.commit()
     return {"message": "Disconnected"}
 
 
@@ -422,7 +418,7 @@ async def create_campaign(
     except GoogleAdsNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     except GoogleAdsException as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_clean_google_ads_error(exc))
+        raise HTTPException(status_code=_google_ads_error_status(exc), detail=_clean_google_ads_error(exc))
     return result
 
 
@@ -445,7 +441,7 @@ async def pause_campaign(
     except GoogleAdsNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     except GoogleAdsException as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_clean_google_ads_error(exc))
+        raise HTTPException(status_code=_google_ads_error_status(exc), detail=_clean_google_ads_error(exc))
     return result
 
 
@@ -470,7 +466,7 @@ async def enable_campaign(
     except GoogleAdsNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     except GoogleAdsException as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_clean_google_ads_error(exc))
+        raise HTTPException(status_code=_google_ads_error_status(exc), detail=_clean_google_ads_error(exc))
     return result
 
 
@@ -493,5 +489,5 @@ async def add_negative_keywords(
     except GoogleAdsNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     except GoogleAdsException as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=_clean_google_ads_error(exc))
+        raise HTTPException(status_code=_google_ads_error_status(exc), detail=_clean_google_ads_error(exc))
     return result

@@ -21,6 +21,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Idempotent vs create_all state: a fresh install built via
+    # Base.metadata.create_all already has token_hash (models are current),
+    # so re-running this migration from a virgin alembic_version must no-op.
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {col["name"] for col in inspector.get_columns("refresh_tokens")}
+    if "token_hash" in columns and "token" not in columns:
+        return
+
     # Invalidate outstanding sessions first: their stored values are
     # plaintext tokens we cannot hash without the raw client-side values,
     # and leaving them as ''-defaulted rows would violate the new unique

@@ -113,6 +113,35 @@ class TestGoogleAdsConnectionStatus:
         )
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
+    def test_disconnect_deactivates_all_connections(self, client, auth_headers, db_session, test_user):
+        """Disconnect must deactivate EVERY owned row (Meta/TikTok pattern),
+        not just the active one -- otherwise a stale `selected` row keeps the
+        account-picker UI in an inconsistent state after reconnect."""
+        from app.models import GoogleAdsConnection
+
+        first = GoogleAdsConnection(
+            user_id=test_user.id,
+            customer_id="1111111111",
+            encrypted_refresh_token="refresh-one",
+            is_active=True,
+        )
+        second = GoogleAdsConnection(
+            user_id=test_user.id,
+            customer_id="2222222222",
+            encrypted_refresh_token="refresh-two",
+            is_active=False,
+        )
+        db_session.add_all([first, second])
+        db_session.commit()
+
+        response = client.delete("/api/v1/google-ads/connection", headers=auth_headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        db_session.refresh(first)
+        db_session.refresh(second)
+        assert first.is_active is False
+        assert second.is_active is False
+
 
 class TestGoogleAdsOAuthCallback:
     """The callback route is intentionally public (no JWT) — identity comes
